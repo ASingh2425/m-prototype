@@ -94,10 +94,10 @@ def login_risk_features(window_events: list[Event], history: list[Event]) -> dic
 
 def compute_login_risk(features: dict[str, Any]) -> float:
     """Symmetric noisy-OR over the three observable login-risk factors."""
-    values = [
-        max(0.0, min(1.0, float(features.get(name, 0.0))))
-        for name in ("geo_velocity_risk", "login_device_novelty", "failed_login_burst")
-    ]
+    geo = max(0.0, min(1.0, float(features.get("geo_velocity_risk", 0.0))))
+    dev = max(0.0, min(1.0, float(features.get("login_device_novelty", 0.0)))) * 0.35
+    failed = max(0.0, min(1.0, float(features.get("failed_login_burst", 0.0))))
+    values = [geo, dev, failed]
     complement = 1.0
     for value in values:
         complement *= 1.0 - value

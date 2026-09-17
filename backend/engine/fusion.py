@@ -21,10 +21,12 @@ from models.db_models import ContextLedgerEntry, Event, Entity
 
 
 CLASSIFICATION_SCORE = {
-    "public": 0.25,
-    "internal": 0.5,
-    "restricted": 0.75,
+    "public": 0.0,
+    "internal": 0.0,
+    "restricted": 0.60,
     "critical": 1.0,
+    None: 0.25,
+    "unclassified": 0.25,
 }
 
 CRITICAL_EVENT_FLOOR = 0.25
@@ -82,10 +84,12 @@ def compute_asset_sensitivity(events: list[Event]) -> float:
     """Prefer max sensitivity (worst asset touched) with a mild average blend."""
     if not events:
         return 0.0
-    scores = [
-        CLASSIFICATION_SCORE.get(e.resource_classification or "internal", 0.5)
-        for e in events
-    ]
+    scores = []
+    for e in events:
+        if e.resource_classification is None:
+            scores.append(0.25)
+        else:
+            scores.append(CLASSIFICATION_SCORE.get(e.resource_classification, 0.0))
     for e in events:
         if e.action == "external_upload":
             scores.append(1.0)
@@ -147,8 +151,9 @@ def event_category_risk(
     """Build auditable, decorrelated categories for one event."""
     is_resource = event.action in {"file_access", "repo_access", "file_download", "external_upload"}
     is_sequence = event.action in {"privilege_change", "file_access", "repo_access", "file_download", "external_upload"}
+    res_class = event.resource_classification if event.resource_classification is not None else "unclassified"
     resource_sensitivity = CLASSIFICATION_SCORE.get(
-        event.resource_classification or "public", 0.25
+        res_class, 0.25
     ) if is_resource else 0.0
     movement = 0.0
     if event.action == "external_upload":

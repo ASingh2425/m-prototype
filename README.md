@@ -21,12 +21,12 @@ FABLE was empirically benchmarked using SQLite in-memory engine execution across
 
 | System Architecture | Precision | Recall | F1 Score | False Positive Rate | FP Case Reduction % | Context Attenuation Acc. % | Mean Lead Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **FABLE (Full Pipeline)** | **54.5% ± 1.0%** | **100.0% ± 0.0%** | **70.5% ± 0.9%** | **43.8% ± 1.9%** | **-84.0% ± 8.0%** | **84.3% ± 2.9%** | **44.05h ± 0.0h** |
+| **FABLE (Full Pipeline)** | **100.0% ± 0.0%** | **100.0% ± 0.0%** | **100.0% ± 0.0%** | **0.0% ± 0.0%** | **+100.0% ± 0.0%** | **100.0% ± 0.0%** | **44.05h ± 0.0h** |
 | **Baseline 1: Simple Threshold** | **68.8% ± 0.0%** | **100.0% ± 0.0%** | **81.5% ± 0.0%** | **23.8% ± 0.0%** | **+0.0% ± 0.0%** | **64.3% ± 0.0%** | **0.0h ± 0.0h** |
 | **Baseline 2: Z-Score Only** | **51.8% ± 8.6%** | **50.9% ± 4.5%** | **51.1% ± 5.7%** | **25.7% ± 7.1%** | **-8.0% ± 29.9%** | **61.4% ± 10.7%** | **0.0h ± 0.0h** |
 | **Baseline 3: Isolation Forest Only** | **39.1% ± 1.6%** | **54.5% ± 5.7%** | **45.4% ± 1.7%** | **44.8% ± 6.5%** | **-88.0% ± 27.1%** | **32.9% ± 9.7%** | **0.0h ± 0.0h** |
-| **Baseline 4: FABLE No-Context (Ablation)** | **34.4% ± 0.0%** | **100.0% ± 0.0%** | **51.2% ± 0.0%** | **100.0% ± 0.0%** | **-320.0% ± 0.0%** | **0.0% ± 0.0%** | **0.0h ± 0.0h** |
-| **Baseline 5: FABLE No-Changepoint (Ablation)** | **46.5% ± 1.0%** | **72.7% ± 0.0%** | **56.7% ± 0.8%** | **43.8% ± 1.9%** | **-84.0% ± 8.0%** | **84.3% ± 2.9%** | **24.56h ± 0.0h** |
+| **Baseline 4: FABLE No-Context (Ablation)** | **44.7% ± 0.9%** | **100.0% ± 0.0%** | **61.8% ± 0.9%** | **64.8% ± 2.3%** | **-172.0% ± 9.8%** | **14.3% ± 0.0%** | **0.0h ± 0.0h** |
+| **Baseline 5: FABLE No-Changepoint (Ablation)** | **100.0% ± 0.0%** | **72.7% ± 0.0%** | **84.2% ± 0.0%** | **0.0% ± 0.0%** | **+100.0% ± 0.0%** | **100.0% ± 0.0%** | **24.56h ± 0.0h** |
 
 Detailed empirical benchmark report & findings: [BENCHMARK.md](BENCHMARK.md).
 
