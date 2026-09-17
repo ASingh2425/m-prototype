@@ -475,29 +475,47 @@ def evaluate_system_fable(db: Session, sc: ScenarioInfo) -> Tuple[bool, float, f
     if not events:
         return False, 0.0, 0.0
 
-    as_of = events[-1].timestamp
     t0 = _ensure_aware(events[0].timestamp)
     baseline_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() < 14 * 86400]
     test_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() >= 14 * 86400] or events
 
-    unusual = select_unusual_events(test_events, baseline_events)
-    risk = compute_risk_for_events(db, sc.actor_id, unusual, as_of=as_of)
-    residual_risk = float(risk["residual_risk"])
+    flagged = False
+    max_score = 0.0
+    first_alert_time = None
 
-    # Page-Hinkley cumulative change-point check on event risk breakdown series
-    breakdown = risk.get("event_risk_breakdown", [])
-    ev_risks = [float(item.get("residual_contribution", 0.0)) for item in breakdown] if breakdown else [residual_risk]
-    ev_times = [unusual[i].timestamp for i in range(min(len(unusual), len(ev_risks)))]
-    cps = detect_change_points(ev_risks, ev_times, delta=PH_DELTA) if len(ev_risks) >= 2 else []
+    ev_risks = []
+    ev_times = []
 
-    flagged = residual_risk >= 70.0 or (len(cps) > 0 and residual_risk >= 50.0)
+    for i in range(1, len(test_events) + 1):
+        sub_events = test_events[:i]
+        current_event = sub_events[-1]
+        as_of = current_event.timestamp
+
+        unusual = select_unusual_events(sub_events, baseline_events)
+        risk = compute_risk_for_events(db, sc.actor_id, unusual, as_of=as_of)
+        residual_risk = float(risk["residual_risk"])
+        if residual_risk > max_score:
+            max_score = residual_risk
+
+        breakdown = risk.get("event_risk_breakdown", [])
+        last_contrib = float(breakdown[-1].get("residual_contribution", 0.0)) if breakdown else residual_risk
+        ev_risks.append(last_contrib)
+        ev_times.append(as_of)
+
+        cps = detect_change_points(ev_risks, ev_times, delta=PH_DELTA) if len(ev_risks) >= 2 else []
+
+        step_flagged = residual_risk >= 70.0 or (len(cps) > 0 and residual_risk >= 50.0)
+        if step_flagged and not flagged:
+            flagged = True
+            first_alert_time = as_of
+            break
 
     lead_time = 0.0
-    if flagged and sc.is_malicious and sc.attack_start_time is not None:
-        delta_hours = (_ensure_aware(as_of) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
-        lead_time = max(0.5, round(delta_hours, 1))
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
 
-    return flagged, residual_risk, lead_time
+    return flagged, max_score, lead_time
 
 
 def evaluate_system_simple_threshold(db: Session, sc: ScenarioInfo) -> Tuple[bool, float, float]:
@@ -505,9 +523,13 @@ def evaluate_system_simple_threshold(db: Session, sc: ScenarioInfo) -> Tuple[boo
     events = (
         db.query(db_models.Event)
         .filter(db_models.Event.actor_id == sc.actor_id)
+        .order_by(db_models.Event.timestamp.asc())
         .all()
     )
     max_severity = 0.0
+    flagged = False
+    first_alert_time = None
+
     for ev in events:
         sev = 10.0
         if ev.action == "external_upload":
@@ -522,11 +544,20 @@ def evaluate_system_simple_threshold(db: Session, sc: ScenarioInfo) -> Tuple[boo
             sev = 70.0
         elif ev.resource_classification == "restricted":
             sev = 60.0
+
         if sev > max_severity:
             max_severity = sev
 
-    flagged = max_severity >= 70.0
-    return flagged, max_severity, 0.0
+        if sev >= 70.0 and not flagged:
+            flagged = True
+            first_alert_time = ev.timestamp
+
+    lead_time = 0.0
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
+
+    return flagged, max_severity, lead_time
 
 
 def evaluate_system_z_score(db: Session, sc: ScenarioInfo) -> Tuple[bool, float, float]:
@@ -542,10 +573,13 @@ def evaluate_system_z_score(db: Session, sc: ScenarioInfo) -> Tuple[bool, float,
 
     base_time = _ensure_aware(events[0].timestamp)
     daily_volumes: Dict[int, float] = {}
+    daily_first_time: Dict[int, datetime] = {}
 
     for ev in events:
         day_idx = (_ensure_aware(ev.timestamp) - base_time).days
         daily_volumes[day_idx] = daily_volumes.get(day_idx, 0.0) + (ev.volume or 0)
+        if day_idx not in daily_first_time:
+            daily_first_time[day_idx] = ev.timestamp
 
     baseline_vols = [v for d, v in daily_volumes.items() if d < 15]
     if len(baseline_vols) < 2:
@@ -555,14 +589,25 @@ def evaluate_system_z_score(db: Session, sc: ScenarioInfo) -> Tuple[bool, float,
     std_v = float(np.std(baseline_vols)) or 1.0
 
     max_z = 0.0
-    for d, v in daily_volumes.items():
+    flagged = False
+    first_alert_time = None
+
+    for d in sorted(daily_volumes.keys()):
         if d >= 15:
+            v = daily_volumes[d]
             z = (v - mean_v) / std_v
             if z > max_z:
                 max_z = z
+            if z >= 3.0 and not flagged:
+                flagged = True
+                first_alert_time = daily_first_time[d]
 
-    flagged = max_z >= 3.0
-    return flagged, max_z * 20.0, 0.0
+    lead_time = 0.0
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
+
+    return flagged, max_z * 20.0, lead_time
 
 
 def evaluate_system_isolation_forest(db: Session, sc: ScenarioInfo, seed: int) -> Tuple[bool, float, float]:
@@ -578,16 +623,18 @@ def evaluate_system_isolation_forest(db: Session, sc: ScenarioInfo, seed: int) -
 
     base_time = _ensure_aware(events[0].timestamp)
     X_baseline = []
+    test_evs = []
     X_test = []
 
     for ev in events:
         day_idx = (_ensure_aware(ev.timestamp) - base_time).days
-        sens = CLASSIFICATION_SCORE.get(ev.resource_classification or "internal", 0.5)
+        sens = CLASSIFICATION_SCORE.get(ev.resource_classification or "internal", 0.25)
         act_code = 1.0 if ev.action in ("privilege_change", "external_upload", "admin") else 0.0
         feat = [float(ev.volume or 0), sens, act_code]
         if day_idx < 15:
             X_baseline.append(feat)
         else:
+            test_evs.append(ev)
             X_test.append(feat)
 
     if not X_baseline or not X_test:
@@ -597,8 +644,19 @@ def evaluate_system_isolation_forest(db: Session, sc: ScenarioInfo, seed: int) -
     clf.fit(X_baseline)
     preds = clf.predict(X_test)
 
-    flagged = any(p == -1 for p in preds)
-    return flagged, 80.0 if flagged else 20.0, 0.0
+    flagged = False
+    first_alert_time = None
+    for p, ev in zip(preds, test_evs):
+        if p == -1 and not flagged:
+            flagged = True
+            first_alert_time = ev.timestamp
+
+    lead_time = 0.0
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
+
+    return flagged, 80.0 if flagged else 20.0, lead_time
 
 
 def evaluate_system_no_context(db: Session, sc: ScenarioInfo) -> Tuple[bool, float, float]:
@@ -612,18 +670,84 @@ def evaluate_system_no_context(db: Session, sc: ScenarioInfo) -> Tuple[bool, flo
     if not events:
         return False, 0.0, 0.0
 
-    as_of = events[-1].timestamp
-    risk = compute_risk_for_events(db, sc.actor_id, events, as_of=as_of)
-    raw_dev = float(risk["raw_deviation"])
-    flagged = raw_dev >= 70.0
-    return flagged, raw_dev, 0.0
+    t0 = _ensure_aware(events[0].timestamp)
+    baseline_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() < 14 * 86400]
+    test_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() >= 14 * 86400] or events
+
+    flagged = False
+    max_score = 0.0
+    first_alert_time = None
+
+    for i in range(1, len(test_events) + 1):
+        sub_events = test_events[:i]
+        current_event = sub_events[-1]
+        as_of = current_event.timestamp
+
+        risk = compute_risk_for_events(db, sc.actor_id, sub_events, as_of=as_of, overrides={"C_t": 0.0})
+        raw_dev = float(risk["raw_deviation"])
+        if raw_dev > max_score:
+            max_score = raw_dev
+
+        if raw_dev >= 70.0 and not flagged:
+            flagged = True
+            first_alert_time = as_of
+            break
+
+    lead_time = 0.0
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
+
+    return flagged, max_score, lead_time
 
 
 def evaluate_system_no_changepoint(db: Session, sc: ScenarioInfo) -> Tuple[bool, float, float]:
-    """Baseline 5: FABLE No-Changepoint Ablation (Instantaneous single window)."""
-    if sc.scenario_type == "slow_exfiltration":
-        return False, 45.0, 0.0
-    return evaluate_system_fable(db, sc)
+    """
+    Baseline 5: FABLE No-Changepoint Ablation.
+    Executes the identical FABLE risk pipeline with Page-Hinkley changepoint checking disabled.
+    Alert criterion: residual_risk >= 70.0 (static threshold without Page-Hinkley lowering).
+    Does NOT inspect scenario_type.
+    """
+    events = (
+        db.query(db_models.Event)
+        .filter(db_models.Event.actor_id == sc.actor_id)
+        .order_by(db_models.Event.timestamp.asc())
+        .all()
+    )
+    if not events:
+        return False, 0.0, 0.0
+
+    t0 = _ensure_aware(events[0].timestamp)
+    baseline_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() < 14 * 86400]
+    test_events = [e for e in events if (_ensure_aware(e.timestamp) - t0).total_seconds() >= 14 * 86400] or events
+
+    flagged = False
+    max_score = 0.0
+    first_alert_time = None
+
+    for i in range(1, len(test_events) + 1):
+        sub_events = test_events[:i]
+        current_event = sub_events[-1]
+        as_of = current_event.timestamp
+
+        unusual = select_unusual_events(sub_events, baseline_events)
+        risk = compute_risk_for_events(db, sc.actor_id, unusual, as_of=as_of)
+        residual_risk = float(risk["residual_risk"])
+        if residual_risk > max_score:
+            max_score = residual_risk
+
+        step_flagged = residual_risk >= 70.0
+        if step_flagged and not flagged:
+            flagged = True
+            first_alert_time = as_of
+            break
+
+    lead_time = 0.0
+    if flagged and sc.is_malicious and sc.attack_start_time is not None and first_alert_time is not None:
+        delta_hours = (_ensure_aware(first_alert_time) - _ensure_aware(sc.attack_start_time)).total_seconds() / 3600.0
+        lead_time = max(0.0, round(delta_hours, 2))
+
+    return flagged, max_score, lead_time
 
 
 # ----------------------------------------------------------------------------

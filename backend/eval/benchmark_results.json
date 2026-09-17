@@ -14,7 +14,7 @@
       "fp_reduction_std": 0.0,
       "ctx_acc_mean": 100.0,
       "ctx_acc_std": 0.0,
-      "lead_time_mean": 44.05,
+      "lead_time_mean": 1.0,
       "lead_time_std": 0.0
     },
     {
@@ -48,8 +48,8 @@
       "fp_reduction_std": 29.9,
       "ctx_acc_mean": 61.4,
       "ctx_acc_std": 10.7,
-      "lead_time_mean": 0.0,
-      "lead_time_std": 0.0
+      "lead_time_mean": 7.06,
+      "lead_time_std": 3.22
     },
     {
       "system_name": "Baseline 3: Isolation Forest Only",
@@ -65,33 +65,33 @@
       "fp_reduction_std": 27.1,
       "ctx_acc_mean": 32.9,
       "ctx_acc_std": 9.7,
-      "lead_time_mean": 0.0,
-      "lead_time_std": 0.0
+      "lead_time_mean": 7.06,
+      "lead_time_std": 3.22
     },
     {
       "system_name": "Baseline 4: FABLE No-Context (Ablation)",
-      "precision_mean": 44.7,
-      "precision_std": 0.9,
+      "precision_mean": 68.8,
+      "precision_std": 0.0,
       "recall_mean": 100.0,
       "recall_std": 0.0,
-      "f1_mean": 61.8,
-      "f1_std": 0.9,
-      "fpr_mean": 64.8,
-      "fpr_std": 2.3,
-      "fp_reduction_mean": -172.0,
-      "fp_reduction_std": 9.8,
-      "ctx_acc_mean": 14.3,
+      "f1_mean": 81.5,
+      "f1_std": 0.0,
+      "fpr_mean": 23.8,
+      "fpr_std": 0.0,
+      "fp_reduction_mean": 0.0,
+      "fp_reduction_std": 0.0,
+      "ctx_acc_mean": 64.3,
       "ctx_acc_std": 0.0,
-      "lead_time_mean": 0.0,
+      "lead_time_mean": 1.0,
       "lead_time_std": 0.0
     },
     {
       "system_name": "Baseline 5: FABLE No-Changepoint (Ablation)",
       "precision_mean": 100.0,
       "precision_std": 0.0,
-      "recall_mean": 72.7,
+      "recall_mean": 100.0,
       "recall_std": 0.0,
-      "f1_mean": 84.2,
+      "f1_mean": 100.0,
       "f1_std": 0.0,
       "fpr_mean": 0.0,
       "fpr_std": 0.0,
@@ -99,7 +99,7 @@
       "fp_reduction_std": 0.0,
       "ctx_acc_mean": 100.0,
       "ctx_acc_std": 0.0,
-      "lead_time_mean": 24.56,
+      "lead_time_mean": 1.0,
       "lead_time_std": 0.0
     }
   ],
