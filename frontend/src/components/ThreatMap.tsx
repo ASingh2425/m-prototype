@@ -64,6 +64,42 @@ interface TelemetryArc {
 const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 520;
 
+// Deterministic non-overlapping label offsets (dx, dy) and quadrants for global city hubs
+const CITY_LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
+  // Europe Cluster (London, Amsterdam, Zurich, Dublin, Paris, Frankfurt, Berlin, Stockholm)
+  london: { dx: -42, dy: -22 },
+  amsterdam: { dx: 0, dy: -28 },
+  zurich: { dx: 42, dy: 18 },
+  dublin: { dx: -48, dy: -26 },
+  paris: { dx: -38, dy: 20 },
+  frankfurt: { dx: 44, dy: -20 },
+  berlin: { dx: 44, dy: -26 },
+  stockholm: { dx: 0, dy: -26 },
+
+  // India Cluster (Mumbai, Bangalore)
+  mumbai: { dx: -40, dy: -22 },
+  bangalore: { dx: 40, dy: 20 },
+
+  // US East Cluster (Toronto, New York)
+  toronto: { dx: -36, dy: -24 },
+  'new-york': { dx: 40, dy: 20 },
+
+  // US West / Central (San Francisco, Seattle, Austin)
+  'san-francisco': { dx: -38, dy: 20 },
+  seattle: { dx: 0, dy: -26 },
+  austin: { dx: 0, dy: 24 },
+
+  // South America
+  'sao-paulo': { dx: 0, dy: -22 },
+
+  // Middle East & APAC (Singapore, Dubai, Seoul, Tokyo, Sydney)
+  singapore: { dx: 0, dy: 26 },
+  dubai: { dx: 0, dy: -24 },
+  seoul: { dx: 0, dy: -24 },
+  tokyo: { dx: 0, dy: -24 },
+  sydney: { dx: 0, dy: 26 },
+};
+
 export function ThreatMap({
   entities,
   onOpenCaseDetail,
@@ -635,49 +671,72 @@ export function ThreatMap({
                     fill="#ffffff"
                   />
 
-                  {/* Clean, Non-Overlapping City Label Badge */}
+                  {/* Clean, Non-Overlapping City Label Badge & Leader Line */}
                   {(() => {
-                    const isSouthOffset = ['singapore', 'new-york', 'sydney'].includes(hub.id);
-                    const offsetY = isSouthOffset ? 18 : -18;
+                    const normId = hub.id.toLowerCase();
+                    const offset = CITY_LABEL_OFFSETS[normId] || { dx: 0, dy: -22 };
+                    const { dx, dy } = offset;
                     const labelText = hub.city.toUpperCase();
                     const textWidth = Math.max(labelText.length * 6.5 + 14, 52);
 
                     return (
-                      <g transform={`translate(0, ${offsetY})`} className="pointer-events-none select-none">
-                        <rect
-                          x={-textWidth / 2}
-                          y="-11"
-                          width={textWidth}
-                          height="18"
-                          rx="5"
-                          fill={
-                            isEscalated
-                              ? 'rgba(232, 52, 42, 0.95)'
-                              : isSelected || isHovered
-                              ? 'rgba(15, 12, 22, 0.95)'
-                              : 'rgba(10, 8, 16, 0.88)'
-                          }
-                          stroke={
-                            isEscalated
-                              ? '#E8342A'
-                              : isSelected || isHovered
-                              ? 'rgba(255, 255, 255, 0.4)'
-                              : 'rgba(255, 255, 255, 0.15)'
-                          }
-                          strokeWidth={isEscalated || isSelected ? "1.5" : "1"}
-                        />
-                        <text
-                          x="0"
-                          y="1.5"
-                          textAnchor="middle"
-                          fill="#ffffff"
-                          fontSize="9.5"
-                          fontFamily="monospace"
-                          fontWeight="bold"
-                          letterSpacing="0.06em"
-                        >
-                          {labelText}
-                        </text>
+                      <g className="pointer-events-none select-none">
+                        {/* Dashed Leader Line from Marker Center (0,0) to Badge Anchor (dx, dy) */}
+                        {(dx !== 0 || Math.abs(dy) > 16) && (
+                          <line
+                            x1="0"
+                            y1="0"
+                            x2={dx}
+                            y2={dy}
+                            stroke={
+                              isEscalated
+                                ? 'rgba(232, 52, 42, 0.75)'
+                                : isSelected || isHovered
+                                ? 'rgba(255, 255, 255, 0.5)'
+                                : 'rgba(255, 255, 255, 0.3)'
+                            }
+                            strokeWidth="1"
+                            strokeDasharray="2,2"
+                          />
+                        )}
+
+                        {/* Label Badge Group */}
+                        <g transform={`translate(${dx}, ${dy})`}>
+                          <rect
+                            x={-textWidth / 2}
+                            y="-11"
+                            width={textWidth}
+                            height="18"
+                            rx="5"
+                            fill={
+                              isEscalated
+                                ? 'rgba(232, 52, 42, 0.95)'
+                                : isSelected || isHovered
+                                ? 'rgba(15, 12, 22, 0.95)'
+                                : 'rgba(10, 8, 16, 0.90)'
+                            }
+                            stroke={
+                              isEscalated
+                                ? '#E8342A'
+                                : isSelected || isHovered
+                                ? 'rgba(255, 255, 255, 0.5)'
+                                : 'rgba(255, 255, 255, 0.2)'
+                            }
+                            strokeWidth={isEscalated || isSelected ? '1.5' : '1'}
+                          />
+                          <text
+                            x="0"
+                            y="1.5"
+                            textAnchor="middle"
+                            fill="#ffffff"
+                            fontSize="9.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                            letterSpacing="0.06em"
+                          >
+                            {labelText}
+                          </text>
+                        </g>
                       </g>
                     );
                   })()}
