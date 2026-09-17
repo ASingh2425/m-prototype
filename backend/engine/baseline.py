@@ -142,10 +142,23 @@ def compute_weights(
     return result
 
 
+_CLUSTER_CACHE: dict[tuple[int, str], dict[str, Any]] = {}
+_FEATURE_DIST_CACHE: dict[tuple, dict[str, list[float]]] = {}
+
+
+def clear_cluster_cache() -> None:
+    _CLUSTER_CACHE.clear()
+    _FEATURE_DIST_CACHE.clear()
+
+
 def compute_behavioral_cluster(
     db: Session, actor_id: int, as_of: datetime
 ) -> dict[str, Any]:
     """Assign an entity to a deterministic k-means behavior cohort."""
+    cache_key = (actor_id, _ensure_aware(as_of).isoformat())
+    if cache_key in _CLUSTER_CACHE:
+        return _CLUSTER_CACHE[cache_key]
+
     assignment_as_of = as_of - timedelta(days=CLUSTER_EXCLUSION_DAYS)
     target = db.query(Entity).filter(Entity.id == actor_id).one()
     actors = (
@@ -195,7 +208,7 @@ def compute_behavioral_cluster(
     if len(members) < MIN_COHORT_SIZE:
         members = [row.id for row in db.query(Entity).filter(Entity.role == target.role).all()]
         fallback = "role_group_small_cluster"
-    return {
+    res = {
         "actor_ids": members,
         "cluster_id": cluster_id,
         "cluster_count": cluster_count,
@@ -205,6 +218,8 @@ def compute_behavioral_cluster(
         "assignment_as_of": assignment_as_of.isoformat(),
         "exclusion_days": CLUSTER_EXCLUSION_DAYS,
     }
+    _CLUSTER_CACHE[cache_key] = res
+    return res
 
 
 def _feature_distribution_for_actors(
@@ -215,6 +230,10 @@ def _feature_distribution_for_actors(
 ) -> dict[str, list[float]]:
     """Collect feature samples across actors at several historical offsets."""
     offsets = sample_offsets_hours or [0, 24, 48, 72, 168]
+    cache_key = (tuple(sorted(actor_ids)), _ensure_aware(as_of).isoformat(), tuple(offsets))
+    if cache_key in _FEATURE_DIST_CACHE:
+        return _FEATURE_DIST_CACHE[cache_key]
+
     dist: dict[str, list[float]] = {k: [] for k in FEATURE_KEYS}
     for aid in actor_ids:
         for oh in offsets:
@@ -231,6 +250,7 @@ def _feature_distribution_for_actors(
             fv = compute_feature_vector(db, aid, as_of=t, peer_actor_ids=peers)
             for k in FEATURE_KEYS:
                 dist[k].append(float(fv["primary"].get(k, 0.0)))
+    _FEATURE_DIST_CACHE[cache_key] = dist
     return dist
 
 

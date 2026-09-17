@@ -17,18 +17,18 @@ FABLE is an enterprise behavioral security platform designed to identify subtle 
 
 ## Benchmark Evaluation & Ablation Study
 
-FABLE was benchmarked across **30 synthetic user organizations and 12 behavioral scenario classes** (normal work, role changes, incident spikes, slow exfiltration, privilege escalation, credential compromise, new-device usage, remote travel, holidays, project migrations, sparse new hires, and baseline poisoning).
+FABLE was empirically benchmarked using SQLite in-memory engine execution across **5 random seeds, evaluating 30 synthetic user organizations per run across 12 behavioral scenario classes** (normal work, role changes, incident spikes, slow exfiltration, privilege escalation, credential compromise, new-device usage, remote travel, holidays, project migrations, sparse new hires, and baseline poisoning).
 
-| System Architecture | Precision | Recall | F1 Score | False Positive Rate | Alert Reduction % | Context Acc. % | Lead Time |
+| System Architecture | Precision | Recall | F1 Score | False Positive Rate | FP Case Reduction % | Context Attenuation Acc. % | Mean Lead Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **FABLE (Full Pipeline)** | **100.0%** | **100.0%** | **100.0%** | **0.0%** | **+100.0%** | **100.0%** | **0.5h** |
-| **Baseline 1: Simple Threshold** | `57.9%` | `100.0%` | `73.3%` | `38.1%` | `+0.0%` | `42.9%` | `0.0h` |
-| **Baseline 2: Z-Score Only** | `39.3%` | `100.0%` | `56.4%` | `81.0%` | `-112.5%` | `0.0%` | `0.0h` |
-| **Baseline 3: Isolation Forest Only** | `84.6%` | `100.0%` | `91.7%` | `9.5%` | `+75.0%` | `85.7%` | `0.0h` |
-| **Baseline 4: FABLE No-Context (Ablation)** | `78.6%` | `100.0%` | `88.0%` | `14.3%` | `+62.5%` | `78.6%` | `0.0h` |
-| **Baseline 5: FABLE No-Changepoint (Ablation)** | `100.0%` | `72.7%` | `84.2%` | `0.0%` | `+100.0%` | `100.0%` | `0.5h` |
+| **FABLE (Full Pipeline)** | **54.5% ± 1.0%** | **100.0% ± 0.0%** | **70.5% ± 0.9%** | **43.8% ± 1.9%** | **-84.0% ± 8.0%** | **84.3% ± 2.9%** | **44.05h ± 0.0h** |
+| **Baseline 1: Simple Threshold** | **68.8% ± 0.0%** | **100.0% ± 0.0%** | **81.5% ± 0.0%** | **23.8% ± 0.0%** | **+0.0% ± 0.0%** | **64.3% ± 0.0%** | **0.0h ± 0.0h** |
+| **Baseline 2: Z-Score Only** | **51.8% ± 8.6%** | **50.9% ± 4.5%** | **51.1% ± 5.7%** | **25.7% ± 7.1%** | **-8.0% ± 29.9%** | **61.4% ± 10.7%** | **0.0h ± 0.0h** |
+| **Baseline 3: Isolation Forest Only** | **39.1% ± 1.6%** | **54.5% ± 5.7%** | **45.4% ± 1.7%** | **44.8% ± 6.5%** | **-88.0% ± 27.1%** | **32.9% ± 9.7%** | **0.0h ± 0.0h** |
+| **Baseline 4: FABLE No-Context (Ablation)** | **34.4% ± 0.0%** | **100.0% ± 0.0%** | **51.2% ± 0.0%** | **100.0% ± 0.0%** | **-320.0% ± 0.0%** | **0.0% ± 0.0%** | **0.0h ± 0.0h** |
+| **Baseline 5: FABLE No-Changepoint (Ablation)** | **46.5% ± 1.0%** | **72.7% ± 0.0%** | **56.7% ± 0.8%** | **43.8% ± 1.9%** | **-84.0% ± 8.0%** | **84.3% ± 2.9%** | **24.56h ± 0.0h** |
 
-Detailed ablation breakdown: [BENCHMARK.md](BENCHMARK.md).
+Detailed empirical benchmark report & findings: [BENCHMARK.md](BENCHMARK.md).
 
 ---
 
