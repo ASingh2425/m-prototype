@@ -2,6 +2,8 @@
 
 FABLE is an enterprise behavioral security platform designed to identify subtle behavioral transitions before security incidents occur. By establishing statistical user baselines, incorporating contextual justifications, and providing transparent explainability, FABLE enables early detection of potentially dangerous account shifts while minimizing false positives.
 
+Deployed site : https://m-prototype-rho.vercel.app/
+
 ---
 
 ## Key Features & Architecture
