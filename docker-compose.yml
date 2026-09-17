@@ -6,15 +6,15 @@ services:
     container_name: fable-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: fable_db
-      POSTGRES_USER: fable_user
-      POSTGRES_PASSWORD: fable_password
+      POSTGRES_DB: ${POSTGRES_DB:-fable_db}
+      POSTGRES_USER: ${POSTGRES_USER:-fable_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fable_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fable_user -d fable_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fable_user} -d ${POSTGRES_DB:-fable_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -43,7 +43,7 @@ services:
       - "8000:8000"
     environment:
       FABLE_ENVIRONMENT: development
-      FABLE_DATABASE_URL: postgresql://fable_user:fable_password@postgres:5432/fable_db
+      FABLE_DATABASE_URL: postgresql://${POSTGRES_USER:-fable_user}:${POSTGRES_PASSWORD:-fable_password}@postgres:5432/${POSTGRES_DB:-fable_db}
       FABLE_REDIS_URL: redis://redis:6379/0
       FABLE_ENFORCEMENT_MODE: sandbox
       FABLE_TENANT_DEFAULT: tenant-default
@@ -63,7 +63,7 @@ services:
     command: python -m access_control.worker
     environment:
       FABLE_ENVIRONMENT: development
-      FABLE_DATABASE_URL: postgresql://fable_user:fable_password@postgres:5432/fable_db
+      FABLE_DATABASE_URL: postgresql://${POSTGRES_USER:-fable_user}:${POSTGRES_PASSWORD:-fable_password}@postgres:5432/${POSTGRES_DB:-fable_db}
       FABLE_REDIS_URL: redis://redis:6379/0
       FABLE_ENFORCEMENT_MODE: sandbox
       FABLE_TENANT_DEFAULT: tenant-default
