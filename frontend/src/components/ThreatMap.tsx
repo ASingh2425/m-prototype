@@ -635,43 +635,52 @@ export function ThreatMap({
                     fill="#ffffff"
                   />
 
-                  {/* City Label Badge */}
-                  <g transform="translate(0, -14)" className="pointer-events-none select-none">
-                    <rect
-                      x={-hub.city.length * 3.4 - 8}
-                      y="-12"
-                      width={hub.city.length * 6.8 + 16}
-                      height="16"
-                      rx="4"
-                      fill={
-                        isEscalated
-                          ? 'rgba(232, 52, 42, 0.95)'
-                          : isSelected || isHovered
-                          ? 'rgba(28, 25, 38, 0.95)'
-                          : 'rgba(18, 16, 24, 0.85)'
-                      }
-                      stroke={
-                        isEscalated
-                          ? '#E8342A'
-                          : isSelected || isHovered
-                          ? 'rgba(255, 255, 255, 0.3)'
-                          : 'rgba(255, 255, 255, 0.1)'
-                      }
-                      strokeWidth="1"
-                    />
-                    <text
-                      x="0"
-                      y="-2"
-                      textAnchor="middle"
-                      fill="#ffffff"
-                      fontSize="9"
-                      fontFamily="monospace"
-                      fontWeight="bold"
-                      letterSpacing="0.05em"
-                    >
-                      {hub.city.toUpperCase()}
-                    </text>
-                  </g>
+                  {/* Clean, Non-Overlapping City Label Badge */}
+                  {(() => {
+                    const isSouthOffset = ['singapore', 'new-york', 'sydney'].includes(hub.id);
+                    const offsetY = isSouthOffset ? 18 : -18;
+                    const labelText = hub.city.toUpperCase();
+                    const textWidth = Math.max(labelText.length * 6.5 + 14, 52);
+
+                    return (
+                      <g transform={`translate(0, ${offsetY})`} className="pointer-events-none select-none">
+                        <rect
+                          x={-textWidth / 2}
+                          y="-11"
+                          width={textWidth}
+                          height="18"
+                          rx="5"
+                          fill={
+                            isEscalated
+                              ? 'rgba(232, 52, 42, 0.95)'
+                              : isSelected || isHovered
+                              ? 'rgba(15, 12, 22, 0.95)'
+                              : 'rgba(10, 8, 16, 0.88)'
+                          }
+                          stroke={
+                            isEscalated
+                              ? '#E8342A'
+                              : isSelected || isHovered
+                              ? 'rgba(255, 255, 255, 0.4)'
+                              : 'rgba(255, 255, 255, 0.15)'
+                          }
+                          strokeWidth={isEscalated || isSelected ? "1.5" : "1"}
+                        />
+                        <text
+                          x="0"
+                          y="1.5"
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="9.5"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                          letterSpacing="0.06em"
+                        >
+                          {labelText}
+                        </text>
+                      </g>
+                    );
+                  })()}
                 </g>
               );
             })}

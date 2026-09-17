@@ -135,20 +135,39 @@ export function ComparisonStrip({ entities, onSelectCase }: ComparisonStripProps
                 </div>
               </div>
 
-              {/* Exact Metrics Row */}
-              <div className="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-black/30 border border-white/5 text-center text-[10px] font-mono mb-2">
-                <div>
-                  <span className="text-zinc-500 block text-[9px]">RAW</span>
-                  <span className="font-semibold text-zinc-200">{rawScore}</span>
+              {/* Exact Metrics Row with Rich Explanatory Tooltips */}
+              <div className="grid grid-cols-3 gap-1 py-1.5 px-2 rounded-lg bg-black/40 border border-white/5 text-center text-[10px] font-mono mb-2">
+                {/* RAW Metric & Tooltip */}
+                <div className="relative group/tooltip">
+                  <span className="text-zinc-400 block text-[9px] font-bold tracking-wider cursor-help border-b border-dashed border-zinc-500 hover:text-white transition-colors">
+                    RAW
+                  </span>
+                  <span className="font-bold text-zinc-100">{rawScore}</span>
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2.5 rounded-lg bg-[#0c0b12] border border-white/20 text-zinc-200 text-[10px] font-sans text-left shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-all z-50 leading-tight">
+                    <div className="font-bold text-amber-400 mb-1 font-mono">RAW = {rawScore}/100</div>
+                    <strong>Unattenuated Anomaly Score</strong>: Behavioral risk probability (0–100) calculated across 7 constituent telemetry signals before context verification.
+                  </div>
                 </div>
-                <div>
-                  <span className="text-zinc-500 block text-[9px]">COV</span>
-                  <span className="font-semibold text-zinc-200">{coveragePct}%</span>
+
+                {/* COV Metric & Tooltip */}
+                <div className="relative group/tooltip">
+                  <span className="text-zinc-400 block text-[9px] font-bold tracking-wider cursor-help border-b border-dashed border-zinc-500 hover:text-white transition-colors">
+                    COV
+                  </span>
+                  <span className="font-bold text-zinc-100">{coveragePct}%</span>
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 rounded-lg bg-[#0c0b12] border border-white/20 text-zinc-200 text-[10px] font-sans text-left shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-all z-50 leading-tight">
+                    <div className="font-bold text-sky-400 mb-1 font-mono">COV = {coveragePct}%</div>
+                    <strong>Context Coverage Credit</strong>: Percentage of observed actions covered by approved context (On-call shift, Jira ticket, RFC change window, travel pass).
+                  </div>
                 </div>
-                <div>
-                  <span className="text-zinc-500 block text-[9px]">RESIDUAL</span>
+
+                {/* RESIDUAL Metric & Tooltip */}
+                <div className="relative group/tooltip">
+                  <span className="text-zinc-400 block text-[9px] font-bold tracking-wider cursor-help border-b border-dashed border-zinc-500 hover:text-white transition-colors">
+                    RESIDUAL
+                  </span>
                   <span
-                    className={`font-bold ${
+                    className={`font-extrabold ${
                       residualScore >= 70
                         ? 'text-rose-400'
                         : residualScore >= 30
@@ -158,6 +177,14 @@ export function ComparisonStrip({ entities, onSelectCase }: ComparisonStripProps
                   >
                     {residualScore}
                   </span>
+                  <div className="pointer-events-none absolute bottom-full right-0 mb-2 w-60 p-2.5 rounded-lg bg-[#0c0b12] border border-white/20 text-zinc-200 text-[10px] font-sans text-left shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-all z-50 leading-tight">
+                    <div className={`font-bold mb-1 font-mono ${
+                      residualScore >= 70 ? 'text-rose-400' : residualScore >= 30 ? 'text-amber-400' : 'text-emerald-400'
+                    }`}>
+                      RESIDUAL = {residualScore}/100
+                    </div>
+                    <strong>Net Risk Post-Context</strong>: Final risk score after context attenuation: <code className="text-amber-300">RAW × (1 - COV)</code>, enforcing a 25 floor per critical asset.
+                  </div>
                 </div>
               </div>
 

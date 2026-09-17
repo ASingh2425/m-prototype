@@ -44,17 +44,27 @@ import { PersonaAvatar } from './PersonaAvatar';
 import { RECORDING_MODE_BADGE, SIMULATED_ENFORCEMENT_LABEL } from '../constants';
 import { DemoPersona } from '../api/client';
 
+interface ActionBannerState {
+  type: 'deny' | 'escalate' | 'approve' | 'context' | 'restriction';
+  title: string;
+  text: string;
+  policy?: string;
+}
+
 interface AccessRequestsViewProps {
   currentPersona: DemoPersona;
   onSwitchPersona: (persona: DemoPersona) => void;
   onNavigateToCase?: (caseId: string) => void;
+  jitAccessState?: ReturnType<typeof useJITAccess>;
 }
 
 export function AccessRequestsView({
   currentPersona,
   onSwitchPersona,
   onNavigateToCase,
+  jitAccessState,
 }: AccessRequestsViewProps) {
+  const localJitState = useJITAccess();
   const {
     requests,
     activeRequestId,
@@ -71,34 +81,103 @@ export function AccessRequestsView({
     approveDevrajRevocation,
     expireNow,
     resetSimulation,
-  } = useJITAccess();
+  } = jitAccessState || localJitState;
 
-  // Modal Dialog States
+  // Modal Dialog States & Action Banner
   const [isApproveModalOpen, setIsApproveModalOpen] = useState<boolean>(false);
   const [isRequestContextModalOpen, setIsRequestContextModalOpen] = useState<boolean>(false);
   const [isDenyModalOpen, setIsDenyModalOpen] = useState<boolean>(false);
   const [isDevrajRevokeModalOpen, setIsDevrajRevokeModalOpen] = useState<boolean>(false);
+  const [actionBanner, setActionBanner] = useState<ActionBannerState | null>(null);
   const [proposeNote, setProposeNote] = useState<string>(
     'Verified active Sev-1 outage #88219 and approved RFC-4109. Propose 15-minute scoped terminal bastion session.'
   );
 
-  // Reviewer / Analyst Identity based on role
+  // Persona RBAC
+  const isAdmin = currentPersona === 'admin';
+  const isAnalyst = currentPersona === 'analyst';
+  const isReviewer = currentPersona === 'reviewer';
+
   const actorName =
-    currentPersona === 'reviewer'
-      ? 'Sarah Sterling'
-      : currentPersona === 'admin'
+    currentPersona === 'admin'
       ? 'Elena Rostova'
+      : currentPersona === 'reviewer'
+      ? 'Sarah Sterling'
       : 'Alex Thorne';
 
   const actorRole =
-    currentPersona === 'reviewer'
+    currentPersona === 'admin'
+      ? 'SOC Administrator / Enforcement Director'
+      : currentPersona === 'reviewer'
       ? 'Authorized Security Reviewer & VP Compliance'
-      : currentPersona === 'admin'
-      ? 'SOC Administrator'
       : 'SOC Tier 2 Analyst';
 
-  const isReviewerOrAdmin = currentPersona === 'reviewer' || currentPersona === 'admin';
-  const isAnalyst = currentPersona === 'analyst';
+  const handleRestrictedAction = (actionName: string) => {
+    setActionBanner({
+      type: 'restriction',
+      title: 'ACTION RESTRICTED: ADMIN PERMISSION REQUIRED',
+      text: `Only the Admin persona (Elena Rostova) has enforcement authority to ${actionName}. Active persona "${actorName}" (${currentPersona.toUpperCase()}) cannot execute administrative decisions.`,
+      policy: 'POL-SOD-001: Separation of Duties & Administrative Control Boundary',
+    });
+  };
+
+  const handleConfirmApprove = (params: {
+    reviewerName: string;
+    reviewerRole: string;
+    reason: string;
+    durationMinutes: number;
+    stepUpVerified: boolean;
+  }) => {
+    approveScopedAccess(activeRequest.id, params);
+    setActionBanner({
+      type: 'approve',
+      title: 'SCOPED ACCESS APPROVED & ACTIVATED (15m TTL)',
+      text: `15-minute temporary scoped session granted to ${activeRequest.employeeName} by Admin (${params.reviewerName}). Step-up WebAuthn MFA verified. Unrelated systems remain locked.`,
+      policy: 'POL-JIT-APPR-001: Authorized Reviewer temporary scoped grant with mandatory MFA step-up.',
+    });
+  };
+
+  const handleConfirmRequestContext = (params: {
+    reviewerName: string;
+    reviewerRole: string;
+    notes: string;
+  }) => {
+    requestMoreContext(activeRequest.id, params);
+    setActionBanner({
+      type: 'context',
+      title: 'ADDITIONAL CONTEXT REQUESTED — ACCESS PAUSED',
+      text: `Formal context clarification issued by Admin (${params.reviewerName}). Access request ${activeRequest.id} remains safely paused before exposure pending ticket issuer response.`,
+      policy: 'POL-JIT-CTX-002: Access request remains paused when additional context is requested.',
+    });
+  };
+
+  const handleConfirmDeny = (params: {
+    reviewerName: string;
+    reviewerRole: string;
+    reason: string;
+  }) => {
+    denyRequest(activeRequest.id, params);
+    setActionBanner({
+      type: 'deny',
+      title: 'ACCESS REQUEST DENIED & ESCALATED TO SECURITY OPS',
+      text: `Access request ${activeRequest.id} (${activeRequest.employeeName}) has been formally denied with zero exposure by Admin (${params.reviewerName}). Incident escalated to SOC Tier 3 for investigation. Justification: "${params.reason}".`,
+      policy: 'POL-JIT-DENY-001: Denied requests terminate immediately with zero exposure.',
+    });
+  };
+
+  const handleConfirmDevrajRevocation = (params: {
+    reviewerName: string;
+    reviewerRole: string;
+    reason: string;
+  }) => {
+    approveDevrajRevocation(params);
+    setActionBanner({
+      type: 'escalate',
+      title: 'INCIDENT ESCALATED & CREDENTIALS FROZEN',
+      text: `Enterprise session for Devraj Malhotra (AR-104) terminated immediately by Admin (${params.reviewerName}). 4.8 GB outbound S3 dump locked under protective hold and Vault master key API tokens frozen. Justification: "${params.reason}".`,
+      policy: 'POL-CONT-009: Human-authorized destructive session revocation and credential freeze.',
+    });
+  };
 
   const priyaReq = requests['AR-203'];
   const devrajReq = requests['AR-104'];
@@ -368,6 +447,65 @@ export function AccessRequestsView({
         </div>
       )}
 
+      {/* 3.5 Action Result / Fixed Confirmation Text / RBAC Restriction Banner */}
+      {actionBanner && (
+        <div
+          className={`p-4 rounded-2xl border flex items-start justify-between gap-4 shadow-xl transition-all font-sans animate-in fade-in duration-200 ${
+            actionBanner.type === 'deny'
+              ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
+              : actionBanner.type === 'escalate'
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
+              : actionBanner.type === 'approve'
+              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+              : actionBanner.type === 'restriction'
+              ? 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+              : 'bg-indigo-500/15 border-indigo-500/40 text-indigo-200'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`p-2 rounded-xl border mt-0.5 ${
+                actionBanner.type === 'deny' || actionBanner.type === 'restriction'
+                  ? 'bg-rose-500/20 border-rose-500/30 text-rose-400'
+                  : actionBanner.type === 'escalate'
+                  ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
+                  : actionBanner.type === 'approve'
+                  ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                  : 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400'
+              }`}
+            >
+              {actionBanner.type === 'deny' && <XCircle className="w-5 h-5" />}
+              {actionBanner.type === 'escalate' && <ShieldAlert className="w-5 h-5" />}
+              {actionBanner.type === 'approve' && <ShieldCheck className="w-5 h-5" />}
+              {actionBanner.type === 'context' && <HelpCircle className="w-5 h-5" />}
+              {actionBanner.type === 'restriction' && <Lock className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-sm text-white tracking-wide">
+                  {actionBanner.title}
+                </span>
+                {actionBanner.policy && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 text-white border border-white/20">
+                    {actionBanner.policy}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed font-sans">
+                {actionBanner.text}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActionBanner(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            title="Dismiss notification"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 4. Active Request Main Inspector */}
       <div className="bg-[#0b0f19] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
         {/* Request Overview Header */}
@@ -402,26 +540,27 @@ export function AccessRequestsView({
         {/* Role Bar & Action Triggers */}
         <div className="p-4 border-b border-white/10 bg-[#080c16] flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400">Current Persona:</span>
+            <span className="text-slate-400">Active Role Persona:</span>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 border border-white/10 font-mono text-white font-semibold">
               <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
               <span>{actorName}</span>
-              <span className="text-[10px] text-slate-400 uppercase">({currentPersona})</span>
+              <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded ${
+                isAdmin
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  : isReviewer
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              }`}>
+                {currentPersona}
+              </span>
             </div>
-            {isAnalyst && (
+            {!isAdmin && (
               <button
-                onClick={() => onSwitchPersona('reviewer')}
-                className="px-2 py-1 rounded bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-[11px] font-mono transition-colors cursor-pointer"
+                onClick={() => onSwitchPersona('admin')}
+                className="px-2.5 py-1 rounded bg-[#C6613F]/20 hover:bg-[#C6613F]/30 border border-[#C6613F]/40 text-[#E07B57] text-[11px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1"
+                title="Switch to Admin (Elena Rostova) for enforcement authority"
               >
-                Switch to Reviewer (Sarah Sterling) →
-              </button>
-            )}
-            {isReviewerOrAdmin && (
-              <button
-                onClick={() => onSwitchPersona('analyst')}
-                className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 text-[11px] font-mono transition-colors cursor-pointer"
-              >
-                Switch to Analyst →
+                <span>Switch to Admin (Elena Rostova) →</span>
               </button>
             )}
           </div>
@@ -434,7 +573,7 @@ export function AccessRequestsView({
                 {/* When PAUSED or AI_REVIEWED */}
                 {(isPaused || isAwaitingApproval || isMoreContextReq) && (
                   <>
-                    {/* Analyst can generate review or propose */}
+                    {/* Analyst can propose */}
                     {isAnalyst && (
                       <button
                         onClick={() =>
@@ -452,40 +591,60 @@ export function AccessRequestsView({
                       </button>
                     )}
 
-                    {/* Reviewer / Admin Actions */}
-                    {isReviewerOrAdmin && (
-                      <>
-                        <button
-                          onClick={() => setIsApproveModalOpen(true)}
-                          className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Approve Scoped Access</span>
-                        </button>
-                        <button
-                          onClick={() => setIsRequestContextModalOpen(true)}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <HelpCircle className="w-3.5 h-3.5" />
-                          <span>Request More Context</span>
-                        </button>
-                        <button
-                          onClick={() => setIsDenyModalOpen(true)}
-                          className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Deny Request</span>
-                        </button>
-                      </>
-                    )}
+                    {/* Decision Action Buttons (Only Admin can execute; locked/restricted for Analyst/Reviewer) */}
+                    <button
+                      onClick={() =>
+                        isAdmin
+                          ? setIsApproveModalOpen(true)
+                          : handleRestrictedAction('approve scoped access requests')
+                      }
+                      className={`px-3.5 py-1.5 rounded-lg text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isAdmin
+                          ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20'
+                          : 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300/70 hover:bg-emerald-900/50'
+                      }`}
+                      title={isAdmin ? 'Approve temporary 15-minute access' : 'Admin authority required (Elena Rostova)'}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Approve Scoped Access</span>
+                      {!isAdmin && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
+                    </button>
 
-                    {/* If analyst tries to approve, show separation of duties indicator */}
-                    {isAnalyst && (
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-black/40 px-2.5 py-1 rounded border border-white/5">
-                        <Lock className="w-3 h-3 text-amber-400" />
-                        <span>Reviewer Approval Required (Separation of Duties)</span>
-                      </div>
-                    )}
+                    <button
+                      onClick={() =>
+                        isAdmin
+                          ? setIsRequestContextModalOpen(true)
+                          : handleRestrictedAction('request additional context')
+                      }
+                      className={`px-3 py-1.5 rounded-lg font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        isAdmin
+                          ? 'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300'
+                          : 'bg-amber-950/30 border border-amber-500/20 text-amber-400/60'
+                      }`}
+                      title={isAdmin ? 'Request formal ticket / manager verification' : 'Admin authority required (Elena Rostova)'}
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Request More Context</span>
+                      {!isAdmin && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        isAdmin
+                          ? setIsDenyModalOpen(true)
+                          : handleRestrictedAction('deny access requests')
+                      }
+                      className={`px-3 py-1.5 rounded-lg font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        isAdmin
+                          ? 'bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold'
+                          : 'bg-rose-950/30 border border-rose-500/20 text-rose-400/60'
+                      }`}
+                      title={isAdmin ? 'Deny request and escalate to Security Ops' : 'Admin authority required (Elena Rostova)'}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Deny Request & Escalate</span>
+                      {!isAdmin && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
+                    </button>
                   </>
                 )}
 
@@ -494,17 +653,20 @@ export function AccessRequestsView({
                   <>
                     <button
                       onClick={() =>
-                        revokeEarly('AR-203', {
-                          actorName,
-                          actorRole,
-                          actorPersona: currentPersona === 'admin' ? 'admin' : 'reviewer',
-                          reason: 'Manual session rollback by authorized reviewer.',
-                        })
+                        isAdmin
+                          ? revokeEarly('AR-203', {
+                              actorName,
+                              actorRole,
+                              actorPersona: 'admin',
+                              reason: 'Manual session rollback by Admin.',
+                            })
+                          : handleRestrictedAction('revoke active sessions')
                       }
                       className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <UserX className="w-3.5 h-3.5" />
                       <span>Revoke Early</span>
+                      {!isAdmin && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
                     </button>
 
                     <button
@@ -533,25 +695,22 @@ export function AccessRequestsView({
             {activeRequest.id === 'AR-104' && (
               <>
                 {devrajReq.currentStatus !== 'REVOKED' ? (
-                  <>
-                    {isReviewerOrAdmin ? (
-                      <button
-                        onClick={() => setIsDevrajRevokeModalOpen(true)}
-                        className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
-                      >
-                        <UserX className="w-3.5 h-3.5" />
-                        <span>Approve Session Revocation</span>
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-rose-300 bg-rose-500/10 px-2.5 py-1 rounded border border-rose-500/20">
-                        <Lock className="w-3 h-3 text-rose-400" />
-                        <span>Session Revocation Awaiting Reviewer Authorization</span>
-                      </div>
-                    )}
-                    <div className="text-[11px] font-mono text-slate-400 px-2">
-                      (No option to approve data export exists)
-                    </div>
-                  </>
+                  <button
+                    onClick={() =>
+                      isAdmin
+                        ? setIsDevrajRevokeModalOpen(true)
+                        : handleRestrictedAction('escalate incidents and revoke sessions')
+                    }
+                    className={`px-3.5 py-1.5 rounded-lg text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isAdmin
+                        ? 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/20'
+                        : 'bg-rose-950/40 border border-rose-500/30 text-rose-300/70 hover:bg-rose-900/50'
+                    }`}
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Approve Session Revocation & Escalate</span>
+                    {!isAdmin && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
+                  </button>
                 ) : (
                   <div className="flex items-center gap-1.5 text-xs font-mono text-rose-400 bg-rose-500/10 px-3 py-1 rounded-lg border border-rose-500/30">
                     <CheckCircle2 className="w-3.5 h-3.5" />
@@ -596,7 +755,7 @@ export function AccessRequestsView({
         request={activeRequest}
         reviewerName={actorName}
         reviewerRole={actorRole}
-        onConfirm={(params) => approveScopedAccess(activeRequest.id, params)}
+        onConfirm={handleConfirmApprove}
       />
 
       <RequestMoreContextModal
@@ -605,7 +764,7 @@ export function AccessRequestsView({
         request={activeRequest}
         reviewerName={actorName}
         reviewerRole={actorRole}
-        onConfirm={(params) => requestMoreContext(activeRequest.id, params)}
+        onConfirm={handleConfirmRequestContext}
       />
 
       <DenyAccessModal
@@ -614,7 +773,7 @@ export function AccessRequestsView({
         request={activeRequest}
         reviewerName={actorName}
         reviewerRole={actorRole}
-        onConfirm={(params) => denyRequest(activeRequest.id, params)}
+        onConfirm={handleConfirmDeny}
       />
 
       <DevrajRevocationModal
@@ -622,7 +781,7 @@ export function AccessRequestsView({
         onClose={() => setIsDevrajRevokeModalOpen(false)}
         reviewerName={actorName}
         reviewerRole={actorRole}
-        onConfirm={approveDevrajRevocation}
+        onConfirm={handleConfirmDevrajRevocation}
       />
     </div>
   );

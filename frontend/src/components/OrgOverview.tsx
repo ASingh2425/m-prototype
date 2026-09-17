@@ -14,6 +14,7 @@ import { useAppMode } from '../caseHooks';
 import { useTheme } from '../useTheme';
 import { AccessRequestsView } from './AccessRequestsView';
 import { JITNotificationToast } from './JITNotificationToast';
+import { useJITAccess } from '../useJITAccess';
 import { RECORDING_MODE_BADGE } from '../constants';
 import {
   Bell,
@@ -106,6 +107,18 @@ export function OrgOverview({
   const { isDemoMode, setDemoMode, persona, setPersona, identity, resetSimulation } = useAppMode();
   const { theme, setTheme, resolvedTheme } = useTheme();
 
+  // JIT Access state for badge counts and real-time synchronization
+  const jitAccess = useJITAccess();
+  const pendingJitCount = useMemo(() => {
+    return Object.values(jitAccess.requests).filter(
+      (r) =>
+        r.currentStatus === 'PAUSED' ||
+        r.currentStatus === 'AI_REVIEWED' ||
+        r.currentStatus === 'AWAITING_APPROVAL' ||
+        r.currentStatus === 'MORE_CONTEXT_REQUIRED'
+    ).length;
+  }, [jitAccess.requests]);
+
   // View mode switcher: '3d-graph' | 'threat-map' | 'matrix' | 'access-requests'
   const [activeView, setActiveView] = useState<'3d-graph' | 'threat-map' | 'matrix' | 'access-requests'>(() => {
     if (typeof window !== 'undefined') {
@@ -131,12 +144,15 @@ export function OrgOverview({
     }
   };
 
-  // Notification system states: fired conditionally after data resolves if a qualifying case exists
+  // Notification system states
   const [toastVisible, setToastVisible] = useState(false);
   const [jitToastVisible, setJitToastVisible] = useState(false);
   const [hasEscalationFired, setHasEscalationFired] = useState(false);
   const [isBellPulsing, setIsBellPulsing] = useState(false);
   const [notificationBellOpen, setNotificationBellOpen] = useState(false);
+  const [isNotificationsCleared, setIsNotificationsCleared] = useState(false);
+
+  const notificationCount = isNotificationsCleared ? 0 : (hasEscalationFired ? 2 : 1);
 
   // Selected Entity for Right-Side Slide-in Drawer
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
@@ -205,9 +221,6 @@ export function OrgOverview({
       (e) => e.riskLevel === 'escalated' || e.caseStatus === 'Containment Recommended'
     );
   }, [entities]);
-
-  // Bell badge count: Requirement is EXACTLY 1 after escalation fires
-  const notificationCount = hasEscalationFired ? 1 : 0;
 
   // Currently open entity for the drawer
   const activeDrawerEntity = useMemo(() => {
@@ -281,11 +294,6 @@ export function OrgOverview({
 
             <div className="flex items-center gap-2 text-xs font-mono">
               <span className={`font-medium ${resolvedTheme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>SOC Console</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] border ${
-                resolvedTheme === 'dark' ? 'bg-white/[0.04] text-zinc-400 border-white/[0.06]' : 'bg-zinc-100 text-zinc-600 border-zinc-200'
-              }`}>
-                {entities.length} nodes
-              </span>
             </div>
           </div>
 
@@ -342,8 +350,12 @@ export function OrgOverview({
             >
               <Key className="w-3.5 h-3.5" />
               <span>Access Requests</span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                1 Paused
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold border ${
+                pendingJitCount > 0
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              }`}>
+                {pendingJitCount > 0 ? `${pendingJitCount} Paused` : '0 Pending'}
               </span>
             </button>
           </div>
@@ -476,55 +488,77 @@ export function OrgOverview({
                     <span className="font-mono uppercase text-[11px] font-semibold text-zinc-300">
                       System Escalations & Access
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      {(hasEscalationFired ? 1 : 0) + 1} Active
-                    </span>
-                  </div>
-
-                  {/* 1. Priya Ramesh Paused Access Request */}
-                  <div
-                    onClick={() => {
-                      setNotificationBellOpen(false);
-                      handleSwitchView('access-requests');
-                    }}
-                    className="p-3 rounded-lg bg-[#141009] border border-amber-500/30 hover:border-amber-400 hover:bg-[#1c140c] transition-all cursor-pointer group mb-2.5"
-                  >
-                    <div className="flex items-center justify-between text-xs font-semibold text-amber-400 mb-1">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        <span>AR-203 — Sensitive Access Paused</span>
+                    <div className="flex items-center gap-2">
+                      {!isNotificationsCleared && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsNotificationsCleared(true);
+                          }}
+                          className="text-[10px] font-mono text-[#C6613F] hover:text-[#E07B57] hover:underline cursor-pointer font-semibold"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {isNotificationsCleared ? '0 Active' : `${(hasEscalationFired ? 1 : 0) + 1} Active`}
                       </span>
-                      <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                    </div>
-                    <p className="text-[11px] text-zinc-300 leading-snug">
-                      <strong>Priya Ramesh</strong>: Emergency access to Payments Bastion paused before exposure. Reviewer authorization required.
-                    </p>
-                    <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                      <span className="text-amber-400 font-medium">Review JIT Access →</span>
-                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">15m TTL Scoped</span>
                     </div>
                   </div>
 
-                  {/* 2. Devraj Malhotra Containment */}
-                  {hasEscalationFired && (
-                    <div
-                      onClick={() => {
-                        setNotificationBellOpen(false);
-                        handleOpenEntityCase('104');
-                      }}
-                      className="p-3 rounded-lg bg-[#140b0b] border border-[#E8342A]/30 hover:border-[#E8342A] hover:bg-[#1a0e0e] transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between text-xs font-semibold text-[#E8342A] mb-1">
-                        <span>Case #104 — Containment Recommended</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  {!isNotificationsCleared ? (
+                    <>
+                      {/* 1. Priya Ramesh Paused Access Request */}
+                      <div
+                        onClick={() => {
+                          setNotificationBellOpen(false);
+                          handleSwitchView('access-requests');
+                        }}
+                        className="p-3 rounded-lg bg-[#141009] border border-amber-500/30 hover:border-amber-400 hover:bg-[#1c140c] transition-all cursor-pointer group mb-2.5"
+                      >
+                        <div className="flex items-center justify-between text-xs font-semibold text-amber-400 mb-1">
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            <span>AR-203 — Sensitive Access Paused</span>
+                          </span>
+                          <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                        <p className="text-[11px] text-zinc-300 leading-snug">
+                          <strong>Priya Ramesh</strong>: Emergency access to Payments Bastion paused before exposure. Reviewer authorization required.
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                          <span className="text-amber-400 font-medium">Review JIT Access →</span>
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">15m TTL Scoped</span>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-zinc-300 leading-snug">
-                        <strong>Devraj Malhotra</strong>: Residual risk 100/100. Singapore ASN ingress + Vault master key read + 4.8 GB S3 dump.
-                      </p>
-                      <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                        <span>Scoped upload hold active</span>
-                        <span className="text-[#C6613F] font-medium">Open Dossier →</span>
-                      </div>
+
+                      {/* 2. Devraj Malhotra Containment */}
+                      {hasEscalationFired && (
+                        <div
+                          onClick={() => {
+                            setNotificationBellOpen(false);
+                            handleOpenEntityCase('104');
+                          }}
+                          className="p-3 rounded-lg bg-[#140b0b] border border-[#E8342A]/30 hover:border-[#E8342A] hover:bg-[#1a0e0e] transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center justify-between text-xs font-semibold text-[#E8342A] mb-1">
+                            <span>Case #104 — Containment Recommended</span>
+                            <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                          <p className="text-[11px] text-zinc-300 leading-snug">
+                            <strong>Devraj Malhotra</strong>: Residual risk 100/100. Singapore ASN ingress + Vault master key read + 4.8 GB S3 dump.
+                          </p>
+                          <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                            <span>Scoped upload hold active</span>
+                            <span className="text-[#C6613F] font-medium">Open Dossier →</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-6 text-center text-zinc-500 font-mono text-xs">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-500/60 mx-auto mb-2" />
+                      <span>All notifications cleared</span>
                     </div>
                   )}
 
@@ -749,6 +783,7 @@ export function OrgOverview({
             currentPersona={persona}
             onSwitchPersona={setPersona}
             onNavigateToCase={handleOpenEntityCase}
+            jitAccessState={jitAccess}
           />
         )}
       </main>
