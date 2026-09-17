@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'General Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+  --color-terracotta: #C6613F;
+  --color-terracotta-dark: #9E4324;
+  --color-terracotta-light: #E07B57;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background-color: #060608;
+    color: #f4f4f5;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Custom Gooey Filter utility */
+.gooey-filter {
+  filter: url(#gooey);
+}
+
+/* Title character stagger styling */
+.title-char {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  transform-origin: center bottom;
+}
+
+/* Subtle glow pulse utility for terracotta accent */
+.terracotta-glow {
+  text-shadow: 0 0 24px rgba(198, 97, 63, 0.45), 0 0 48px rgba(198, 97, 63, 0.2);
+}
+
+.box-terracotta-glow {
+  box-shadow: 0 0 25px -3px rgba(198, 97, 63, 0.35), 0 0 10px -2px rgba(198, 97, 63, 0.2);
+}
+
+/* Bell Pulse Animation when escalation fires */
+@keyframes bellAlertPulse {
+  0% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.22) rotate(-14deg);
+  }
+  30% {
+    transform: scale(1.22) rotate(14deg);
+  }
+  45% {
+    transform: scale(1.15) rotate(-10deg);
+  }
+  60% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  75% {
+    transform: scale(1.05) rotate(0deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-bell-pulse {
+  animation: bellAlertPulse 1.1s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Global Threat Map Radar Pulses */
+@keyframes threatRadarPulse {
+  0% {
+    r: 6;
+    opacity: 0.95;
+    stroke-width: 2.2;
+  }
+  60% {
+    opacity: 0.45;
+  }
+  100% {
+    r: 32;
+    opacity: 0;
+    stroke-width: 0.5;
+  }
+}
+
+@keyframes threatRadarSecondary {
+  0% {
+    r: 6;
+    opacity: 0.85;
+    stroke-width: 1.8;
+  }
+  60% {
+    opacity: 0.35;
+  }
+  100% {
+    r: 48;
+    opacity: 0;
+    stroke-width: 0.4;
+  }
+}
+
+@keyframes telemetryDash {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+.animate-radar-pulse {
+  animation: threatRadarPulse 2.2s cubic-bezier(0.15, 0.75, 0.35, 1) infinite;
+}
+
+.animate-radar-secondary {
+  animation: threatRadarSecondary 2.2s cubic-bezier(0.15, 0.75, 0.35, 1) infinite 0.7s;
+}
+
+.animate-telemetry-flow {
+  stroke-dasharray: 6 6;
+  animation: telemetryDash 1.2s linear infinite;
+}
+
+/* Smooth custom scrollbar for dark background */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #060608;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fable-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fable_db
+      POSTGRES_USER: fable_user
+      POSTGRES_PASSWORD: fable_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fable_user -d fable_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: fable-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fable-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      FABLE_ENVIRONMENT: development
+      FABLE_DATABASE_URL: postgresql://fable_user:fable_password@postgres:5432/fable_db
+      FABLE_REDIS_URL: redis://redis:6379/0
+      FABLE_ENFORCEMENT_MODE: sandbox
+      FABLE_TENANT_DEFAULT: tenant-default
+      FABLE_API_KEYS: '{"analyst-key":{"subject":"analyst-1","role":"analyst"},"reviewer-key":{"subject":"reviewer-1","role":"reviewer"},"admin-key":{"subject":"admin-1","role":"admin"}}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fable-worker
+    restart: unless-stopped
+    command: python -m access_control.worker
+    environment:
+      FABLE_ENVIRONMENT: development
+      FABLE_DATABASE_URL: postgresql://fable_user:fable_password@postgres:5432/fable_db
+      FABLE_REDIS_URL: redis://redis:6379/0
+      FABLE_ENFORCEMENT_MODE: sandbox
+      FABLE_TENANT_DEFAULT: tenant-default
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fable-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_FABLE_MODE: recording
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:

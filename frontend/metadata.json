@@ -1,0 +1,6 @@
+{
+  "name": "FABLE",
+  "description": "FABLE insider-threat intelligence platform with context-aware just-in-time access, continuous intent graph, global geographic threat map, protective hold security engine, and forensic case dossiers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
