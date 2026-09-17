@@ -18,7 +18,8 @@ def append_audit(
 ) -> AuditRecord:
     timestamp = now or datetime.now(timezone.utc)
     previous = db.query(AuditRecord).filter(
-        AuditRecord.tenant_id == tenant_id
+        AuditRecord.tenant_id == tenant_id,
+        AuditRecord.aggregate_id == aggregate_id,
     ).order_by(AuditRecord.timestamp.desc(), AuditRecord.id.desc()).with_for_update().first()
     previous_hash = previous.record_hash if previous else None
     canonical = json.dumps({
